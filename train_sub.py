@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from models.transformer_autoencoder import TransformerAutoencoder
-from data import load_data
+from data_2 import load_data
 import numpy as np
-from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
 
-def train_unsupervised_model(model, X_train, X_test, y_test=None, device='cpu', num_epochs=20, batch_size=128, lr=0.001):
+def train_unsupervised_model(model, X_train, X_test, y_test=None, device='cpu', num_epochs=15, batch_size=128, lr=0.001):
     model.to(device)
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -30,13 +30,7 @@ def train_unsupervised_model(model, X_train, X_test, y_test=None, device='cpu', 
     return model
 
 
-
-
-import torch
-import numpy as np
-from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, roc_auc_score
-
-def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128, max_test_samples=100000):
+def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128, max_test_samples=10000):
     model.eval()
 
     # Step 1: Randomly sample indices
@@ -74,7 +68,7 @@ def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128,
     # Step 5: Compute threshold from fault-free samples
     fault_free_mask = y_true == 0
     
-    threshold = np.percentile(recon_errors[fault_free_mask], 80)
+    threshold = np.percentile(recon_errors[fault_free_mask], 30)
 
 
     print(f"Auto threshold: {threshold:.4f}")
@@ -87,16 +81,11 @@ def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128,
     f1 = f1_score(y_binary, y_pred, zero_division=0)
     precision = precision_score(y_binary, y_pred, zero_division=0)
     recall = recall_score(y_binary, y_pred, zero_division=0)
-    try:
-        roc_auc = roc_auc_score(y_binary, recon_errors)
-    except ValueError:
-        roc_auc = float('nan')
 
     print(f"Accuracy     : {accuracy:.4f}")
     print(f"F1-score     : {f1:.4f}")
     print(f"Precision    : {precision:.4f}")
     print(f"Recall       : {recall:.4f}")
-    print(f"ROC-AUC      : {roc_auc:.4f}")
 
 
 
@@ -104,7 +93,7 @@ def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128,
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(device)
-    X_train, X_test, _, y_test= load_data() 
+    X_train, X_test, _, y_test, _ = load_data() 
 
     model = TransformerAutoencoder(input_dim=X_train.shape[2], seq_len=X_train.shape[1])
     trained_model = train_unsupervised_model(model, X_train, X_test, device=device)

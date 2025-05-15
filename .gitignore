@@ -1,6 +1,6 @@
 # Ignore zip files
 *.zip
-
+*.npz
 # Ignore R workspace data files
 *.RData
 
@@ -20,4 +20,3 @@ myenv/
 # Ignore system files
 .DS_Store
 Thumbs.db
-.npz

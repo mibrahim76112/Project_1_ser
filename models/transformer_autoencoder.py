@@ -9,7 +9,7 @@ class PositionalEncoding(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(10000.0)) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(1)  # [max_len, 1, d_model]
+        pe = pe.unsqueeze(1)  
         self.register_buffer('pe', pe)
 
     def forward(self, x):
@@ -35,8 +35,7 @@ class TransformerAutoencoder(nn.Module):
         self.positional_encoding = PositionalEncoding(input_dim, max_len=seq_len)
 
     def forward(self, x):
-        # x: [batch, seq_len, input_dim]
-        src = self.positional_encoding(x.permute(1, 0, 2)).permute(1, 0, 2)  # Apply PE and back to [batch, seq_len, dim]
+        src = self.positional_encoding(x.permute(1, 0, 2)).permute(1, 0, 2) 
         memory = self.encoder(src)
         out = self.decoder(src, memory)
         return out

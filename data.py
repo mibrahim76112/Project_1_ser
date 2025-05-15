@@ -1,5 +1,4 @@
 import os
-import pyreadr
 import numpy as np
 import pandas as pd
 import cupy as cp
@@ -7,7 +6,13 @@ from cuml.preprocessing import StandardScaler as cuStandardScaler
 from sklearn.model_selection import train_test_split 
 
 def load_data_lda(window_size=30, stride=4, apply_lda=False, test_size=0.2,
-                  npz_path='data.npz', save_processed=True):
+                  npz_path='/workspace/Data_100_x.npz', save_processed=True, mode='unsupervised'):
+    """
+    mode: str
+        - 'supervised': Use all data for training (faulty + fault-free).
+        - 'unsupervised': Use only fault-free data for training.
+    """
+
     def create_windows(X, y, window, stride):
         num_windows = (len(X) - window) // stride + 1
         X_indices = np.arange(window)[None, :] + np.arange(num_windows)[:, None] * stride
@@ -24,40 +29,18 @@ def load_data_lda(window_size=30, stride=4, apply_lda=False, test_size=0.2,
         X_test_scaled = data['X_test']
         y_train = data['y_train']
         y_test = data['y_test']
-        print("Preprocessed data loaded.")
+
+        # Apply filtering based on mode
+        if mode == 'unsupervised':
+            print("Unsupervised mode: Filtering fault-free data for training...")
+            fault_free_indices = y_train == 0
+            X_train_scaled = X_train_scaled[fault_free_indices]
+            y_train = y_train[fault_free_indices]
+
+        print("Preprocessed data loaded and filtered.")
+
     else:
-        print("Loading raw datasets...")
-        df_ff = pyreadr.read_r(r'TEP_FaultFree_Training.RData')['fault_free_training']
-        df_faulty = pyreadr.read_r(r'TEP_Faulty_Training.RData')['faulty_training']
-
-        df_all = pd.concat([df_ff, df_faulty])
-        fault_free = df_all[df_all['faultNumber'] == 0].iloc[:, 3:]
-        #X = fault_free.values.astype(np.float32)
-        #y = df_all[df_all['faultNumber'] == 0]['faultNumber'].values.astype(np.int32)
-
-        # Split train/test
-        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=41)
-        X_all = df_all.iloc[:, 3:].values.astype(np.float32)
-        y_all = df_all['faultNumber'].values  # Labels
-
-        # Split into train and test sets
-        X_train, X_test, y_train, y_test = train_test_split(X_all, y_all, test_size=test_size, random_state=41)
-
-
-        # Scale on GPU
-        print("Scaling datasets on GPU...")
-        scaler = cuStandardScaler()
-        X_train_scaled = scaler.fit_transform(cp.asarray(X_train)).get()
-        X_test_scaled = scaler.transform(cp.asarray(X_test)).get()
-
-        # Save processed data for future use
-        if save_processed:
-            np.savez(npz_path,
-                     X_train=X_train_scaled,
-                     X_test=X_test_scaled,
-                     y_train=y_train,
-                     y_test=y_test)
-            print(f"Processed data saved to {npz_path}")
+        raise FileNotFoundError(f"File not found: {npz_path}")
 
     print("Creating windowed datasets...")
     X_train_windows, y_train_windows = create_windows(X_train_scaled, y_train, window_size, stride)
