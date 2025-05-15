@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from models.transformer_autoencoder import TransformerAutoencoder
-from data_2 import load_data
+from data import load_sampled_data
 import numpy as np
+from models.selfgated_hierarchial_transformer import SelfGatedHierarchicalTransformerEncoder
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
 
-def train_unsupervised_model(model, X_train, X_test, y_test=None, device='cpu', num_epochs=15, batch_size=128, lr=0.001):
+def train_unsupervised_model(model, X_train, X_test, y_test=None, device='cpu', num_epochs=10, batch_size=128, lr=0.001):
     model.to(device)
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -64,10 +65,9 @@ def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128,
 
     recon_errors = np.mean((reconstructions - X_test_sampled) ** 2, axis=(1, 2))
 
-    #Compute threshold from fault-free samples
     fault_free_mask = y_true == 0
     
-    threshold = np.percentile(recon_errors[fault_free_mask], 30)
+    threshold = np.percentile(recon_errors[fault_free_mask], 10)
 
 
     print(f"Auto threshold: {threshold:.4f}")
@@ -92,9 +92,10 @@ def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128,
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(device)
-    X_train, X_test, _, y_test, _ = load_data() 
+    X_train, X_test, _, y_test = load_sampled_data(window_size=10, stride=3, type_model = "unsupervised")
 
     model = TransformerAutoencoder(input_dim=X_train.shape[2], seq_len=X_train.shape[1])
+    
     trained_model = train_unsupervised_model(model, X_train, X_test, device=device)
 
     evaluate_reconstruction(trained_model, X_test, y_test, device=device)

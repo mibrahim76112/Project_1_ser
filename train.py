@@ -25,7 +25,7 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
     
     scaler = GradScaler() 
     
-    num_epochs = 15
+    num_epochs = 50
     batch_size = 32
     
     for epoch in range(num_epochs):
@@ -76,7 +76,7 @@ def main():
 
     #model = TransformerModel(input_dim=X_train.shape[2], num_classes=num_classes, num_layers=1, num_heads=1, ff_dim=128, dropout=0.2, max_len=500 )
     #model = HierarchicalTransformerEncoder(input_dim=X_train.shape[2], d_model=128, nhead=4, num_layers_low=2, num_layers_high=2, dim_feedforward=128,dropout=0.2)
-    model = SelfGatedHierarchicalTransformerEncoder( input_dim=X_train.shape[2], d_model=128, nhead=4, num_layers_low=2, num_layers_high=2, dim_feedforward=128, dropout=0.01, pool_output_size=10, num_classes=21)
+    model = SelfGatedHierarchicalTransformerEncoder( input_dim=X_train.shape[2], d_model=128, nhead=4, num_layers_low=2, num_layers_high=2, dim_feedforward=128, dropout=0.05, pool_output_size=10, num_classes=21)
     train_model(model, X_train, y_train, X_test, y_test, num_classes, device)
 
 if __name__ == "__main__":
