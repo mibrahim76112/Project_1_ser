@@ -23,7 +23,7 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
     
     scaler = GradScaler() 
     
-    num_epochs = 50
+    num_epochs = 10
     batch_size = 128
     
     for epoch in range(num_epochs):
@@ -57,8 +57,7 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
         print_classification_metrics(y_true, y_pred)
 
 def main():
-    X_train, X_test, y_train, y_test = load_data(window_size=10, stride=2)
-    num_classes = 21
+    X_train, X_test, y_train, y_test,num_classes = load_data(window_size=10, stride=2)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     model = TransformerModel(input_dim=X_train.shape[2], num_classes=num_classes, num_layers=1, num_heads=1, ff_dim=128, dropout=0.3, max_len=500 )

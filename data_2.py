@@ -69,5 +69,6 @@ def load_data(window_size=20, stride=5, num_samples=50000):
 
     # Create windowed test data
     X_test, y_test = create_windows_gpu(X_all_test_scaled, cp.asarray(y_all_test), window_size, stride)
+    print(f"Returning {len(np.unique(y_train))} train classes and {len(np.unique(y_test))} test classes")
 
-    return X_train, X_test, y_train, y_test, len(np.unique(y_faulty))
+    return X_train, X_test, y_train, y_test, len(np.unique(y_test))
