@@ -3,7 +3,7 @@
 *.npz
 # Ignore R workspace data files
 *.RData
-
+*.pth
 # Optional: Ignore Python cache and virtual environments
 __pycache__/
 *.py[cod]
