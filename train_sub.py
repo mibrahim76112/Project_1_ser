@@ -51,7 +51,7 @@ def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128,
     reconstructions = []
     labels = []
 
-    # Step 3: Inference in batches
+    
     with torch.no_grad():
         for batch_x, batch_y in test_loader:
             batch_x = batch_x.to(device)
@@ -62,10 +62,9 @@ def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128,
     reconstructions = np.concatenate(reconstructions, axis=0)
     y_true = np.concatenate(labels, axis=0)
 
-    # Step 4: Calculate reconstruction errors
     recon_errors = np.mean((reconstructions - X_test_sampled) ** 2, axis=(1, 2))
 
-    # Step 5: Compute threshold from fault-free samples
+    #Compute threshold from fault-free samples
     fault_free_mask = y_true == 0
     
     threshold = np.percentile(recon_errors[fault_free_mask], 30)
@@ -76,7 +75,7 @@ def evaluate_reconstruction(model, X_test, y_test, device='cpu', batch_size=128,
     y_pred = (recon_errors > threshold).astype(int)
     y_binary = (y_true > 0).astype(int)
 
-    # Step 6: Evaluation metrics
+   
     accuracy = accuracy_score(y_binary, y_pred)
     f1 = f1_score(y_binary, y_pred, zero_division=0)
     precision = precision_score(y_binary, y_pred, zero_division=0)

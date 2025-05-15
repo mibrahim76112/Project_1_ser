@@ -9,16 +9,16 @@ class PositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
         pe = torch.zeros(max_len, d_model)  # [max_len, d_model]
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)  # [max_len, 1]
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1) 
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))  # [d_model/2]
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
 
-        pe = pe.unsqueeze(1)  # [max_len, 1, d_model]
+        pe = pe.unsqueeze(1)  
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        # x: [seq_len, batch_size, d_model]
+     
         x = x + self.pe[:x.size(0)]
         return self.dropout(x)
 
@@ -63,15 +63,15 @@ class TransformerModel(nn.Module):
         self.fc = nn.Linear(ff_dim, num_classes)
 
     def forward(self, x):
-        # x: [batch_size, seq_len, input_dim]
-        x = self.input_proj(x)  # [batch_size, seq_len, ff_dim]
-        x = x.permute(1, 0, 2)  # [seq_len, batch_size, ff_dim]
+     
+        x = self.input_proj(x)  
+        x = x.permute(1, 0, 2) 
         x = self.pos_encoder(x)
 
         for layer in self.encoder_layers:
             x = layer(x)
 
-        x = x.permute(1, 2, 0)  # [batch_size, ff_dim, seq_len]
-        x = self.pool(x).squeeze(-1)  # [batch_size, ff_dim]
-        x = self.fc(x)  # [batch_size, num_classes]
+        x = x.permute(1, 2, 0) 
+        x = self.pool(x).squeeze(-1) 
+        x = self.fc(x)  
         return x

@@ -1,88 +1,78 @@
-import os
+# ================ data.py ================
+import pyreadr
 import numpy as np
 import pandas as pd
 import cupy as cp
 from cuml.preprocessing import StandardScaler as cuStandardScaler
-from sklearn.model_selection import train_test_split 
 
-def load_data_lda(window_size=30, stride=4, apply_lda=False, test_size=0.2,
-                  npz_path='/workspace/Data_100_x.npz', save_processed=True, mode='unsupervised'):
-    """
-    mode: str
-        - 'supervised': Use all data for training (faulty + fault-free).
-        - 'unsupervised': Use only fault-free data for training.
-    """
+def read_training_data():
+    """Reads and merges fault-free and faulty training data from .RData files."""
+    b1 = pyreadr.read_r("TEP_FaultFree_Training.RData")['fault_free_training']
+    b2 = pyreadr.read_r("TEP_Faulty_Training.RData")['faulty_training']
+    train_ts = pd.concat([b1, b2])
+    return train_ts.sort_values(by=['faultNumber', 'simulationRun'])
 
-    def create_windows(X, y, window, stride):
-        num_windows = (len(X) - window) // stride + 1
-        X_indices = np.arange(window)[None, :] + np.arange(num_windows)[:, None] * stride
-        y_indices = np.arange(window - 1, len(X), stride)
-        X_win = X[X_indices]
-        y_win = y[y_indices]
-        return X_win.astype(np.float32), y_win.astype(np.int32)
+def sample_train_and_test(train_ts):
+    """Samples train and test data from training set using predefined logic."""
+    sampled_train, sampled_test = pd.DataFrame(), pd.DataFrame()
+    
+    # Sampled Train
+    frames_train = []
+    for i in sorted(train_ts['faultNumber'].unique()):
+        if i == 0:
+            frames_train.append(train_ts[train_ts['faultNumber'] == i].iloc[0:20000])
+        else:
+            fr = []
+            b = train_ts[train_ts['faultNumber'] == i]
+            for x in range(1, 25):
+                b_x = b[b['simulationRun'] == x].iloc[20:500]
+                fr.append(b_x)
+            frames_train.append(pd.concat(fr))
+    sampled_train = pd.concat(frames_train)
 
-    # Try loading preprocessed data if available
-    if os.path.exists(npz_path):
-        print(f"Loading preprocessed data from {npz_path}...")
-        data = np.load(npz_path)
-        X_train_scaled = data['X_train']
-        X_test_scaled = data['X_test']
-        y_train = data['y_train']
-        y_test = data['y_test']
+    # Sampled Test
+    frames_test = []
+    for i in sorted(train_ts['faultNumber'].unique()):
+        if i == 0:
+            frames_test.append(train_ts[train_ts['faultNumber'] == i].iloc[30000:32000])
+        else:
+            fr = []
+            b = train_ts[train_ts['faultNumber'] == i]
+            for x in range(36, 46):
+                b_x = b[b['simulationRun'] == x].iloc[160:660]
+                fr.append(b_x)
+            frames_test.append(pd.concat(fr))
+    sampled_test = pd.concat(frames_test)
 
-        # Apply filtering based on mode
-        if mode == 'unsupervised':
-            print("Unsupervised mode: Filtering fault-free data for training...")
-            fault_free_indices = y_train == 0
-            X_train_scaled = X_train_scaled[fault_free_indices]
-            y_train = y_train[fault_free_indices]
+    return sampled_train, sampled_test
 
-        print("Preprocessed data loaded and filtered.")
+def scale_and_window(X_df, y_col='faultNumber', window_size=20, stride=5):
+    """Scales and applies sliding window on GPU using CuML."""
+    y = X_df[y_col].values
+    X = X_df.iloc[:, 3:].values  # Skip metadata columns
 
-    else:
-        raise FileNotFoundError(f"File not found: {npz_path}")
+    scaler = cuStandardScaler()
+    X_scaled = scaler.fit_transform(cp.asarray(X))
 
-    print("Creating windowed datasets...")
-    X_train_windows, y_train_windows = create_windows(X_train_scaled, y_train, window_size, stride)
-    X_test_windows, y_test_windows = create_windows(X_test_scaled, y_test, window_size, stride)
+    # Create windows
+    num_windows = (len(X_scaled) - window_size) // stride + 1
+    X_indices = cp.arange(window_size)[None, :] + cp.arange(num_windows)[:, None] * stride
+    y_indices = cp.arange(window_size - 1, len(X_scaled), stride)
 
-    if apply_lda:
-        print("Applying Custom GPU LDA...")
+    X_win = X_scaled[X_indices]
+    y_win = cp.asarray(y)[y_indices]
 
-        num_samples, win_size, num_features = X_train_windows.shape
-        X_train_flat = X_train_windows.reshape(-1, num_features)
-        X_test_flat = X_test_windows.reshape(-1, num_features)
+    return X_win.get(), y_win.get()
 
-        X_train_gpu = cp.asarray(X_train_flat)
-        y_train_gpu = cp.asarray(y_train_windows.repeat(win_size))
+def load_sampled_data(window_size=20, stride=5):
+    """Main function to load sampled and windowed train/test data (no CV)."""
+    train_ts = read_training_data()
+    sampled_train, sampled_test = sample_train_and_test(train_ts)
 
-        class_labels = cp.unique(y_train_gpu)
-        mean_vectors = {label: X_train_gpu[y_train_gpu == label].mean(axis=0) for label in class_labels}
-        overall_mean = X_train_gpu.mean(axis=0)
+    print("[INFO] Scaling and windowing training data...")
+    X_train, y_train = scale_and_window(sampled_train, window_size=window_size, stride=stride)
 
-        SW = cp.zeros((num_features, num_features), dtype=cp.float32)
-        for label, mean_vec in mean_vectors.items():
-            class_scatter = X_train_gpu[y_train_gpu == label] - mean_vec
-            SW += class_scatter.T @ class_scatter
+    print("[INFO] Scaling and windowing test data...")
+    X_test, y_test = scale_and_window(sampled_test, window_size=window_size, stride=stride)
 
-        SB = cp.zeros((num_features, num_features), dtype=cp.float32)
-        for label, mean_vec in mean_vectors.items():
-            n = cp.sum(y_train_gpu == label)
-            mean_diff = (mean_vec - overall_mean).reshape(-1, 1)
-            SB += n * (mean_diff @ mean_diff.T)
-
-        eig_vals, eig_vecs = cp.linalg.eigh(cp.linalg.inv(SW) @ SB)
-        eig_vecs = eig_vecs[:, ::-1]
-        eig_vecs = eig_vecs[:, :20]
-
-        X_train_lda = (X_train_gpu @ eig_vecs).get()
-        X_test_lda = (cp.asarray(X_test_flat) @ eig_vecs).get()
-
-        num_train_samples = X_train_lda.shape[0] // win_size
-        num_test_samples = X_test_lda.shape[0] // win_size
-
-        X_train_windows = X_train_lda.reshape(num_train_samples, win_size, 20).astype(np.float32)
-        X_test_windows = X_test_lda.reshape(num_test_samples, win_size, 20).astype(np.float32)
-
-    print("Data loading complete.")
-    return X_train_windows, X_test_windows, y_train_windows, y_test_windows
+    return X_train, X_test, y_train, y_test
