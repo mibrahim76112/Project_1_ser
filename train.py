@@ -24,15 +24,16 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
     criterion = nn.CrossEntropyLoss()
     
     scaler = GradScaler() 
-    
-    num_epochs = 50
-    batch_size = 32
-    
+    num_epochs = 20
+    batch_size = 64
+
+    loss_history = []  # Store loss values
+
     for epoch in range(num_epochs):
         torch.cuda.empty_cache()
         model.train()
         permutation = torch.randperm(X_train_tensor.size(0))
-        torch.cuda.empty_cache()
+        epoch_loss = 0.0
 
         for i in range(0, X_train_tensor.size(0), batch_size):
             indices = permutation[i:i + batch_size]
@@ -46,11 +47,23 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-        
-        torch.cuda.empty_cache()
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}")
+            epoch_loss += loss.item()
+
+        avg_loss = epoch_loss / (X_train_tensor.size(0) // batch_size)
+        loss_history.append(avg_loss)
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_loss:.4f}")
         torch.save(model.state_dict(), "transformer_model_1.pth")
 
+    # Plot loss curve
+    plt.figure()
+    plt.plot(loss_history, label="Training Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training Loss Over Epochs")
+    plt.legend()
+    plt.grid()
+    plt.savefig("loss_curve.png")
+    plt.show()
 
 
     model.eval()
