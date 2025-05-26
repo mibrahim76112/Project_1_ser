@@ -8,7 +8,7 @@ from models.hierarchial_transformer import HierarchicalTransformerEncoder
 from models.selfgated_hierarchial_transformer import SelfGatedHierarchicalTransformerEncoder
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
-
+import matplotlib.pyplot as plt
 from torch.amp import GradScaler
 from torch.amp import autocast
 
