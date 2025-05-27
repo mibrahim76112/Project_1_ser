@@ -21,10 +21,10 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
     y_test_tensor = torch.tensor(y_test, dtype=torch.long).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
     
     scaler = GradScaler() 
-    num_epochs = 20
+    num_epochs = 100
     batch_size = 64
 
     loss_history = []  # Store loss values
@@ -77,7 +77,7 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
         print_classification_metrics(y_true, y_pred)
 
 def main():
-    X_train, X_test, y_train, y_test = load_sampled_data(window_size=40, stride=5)
+    X_train, X_test, y_train, y_test = load_sampled_data(window_size=100, stride=5)
 
     print("Training Data Shape:", X_train.shape, y_train.shape)
     print("Test Data Shape:", X_test.shape, y_test.shape)
