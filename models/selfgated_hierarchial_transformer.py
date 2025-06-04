@@ -3,6 +3,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class PositionalEncoding(nn.Module):
+    """
+    Implements the sinusoidal positional encoding
+
+    This encoding injects information about the position of tokens in the sequence,
+    enabling the Transformer to leverage order without recurrence or convolution.
+
+    Args:
+        d_model (int): The dimensionality of the embedding vector.
+        max_len (int): The maximum length of input sequences to be encoded.
+
+    Attributes:
+        pe (Tensor): A (1, max_len, d_model) tensor containing positional encodings.
+
+    Forward Input:
+        x (Tensor): Input embeddings of shape (batch_size, seq_len, d_model).
+
+    Forward Output:
+        Tensor of same shape as input with positional encodings added.
+    """
     def __init__(self, d_model, max_len=1000):
         super().__init__()
         # Eq. (2) and (3): sinusoidal positional encoding
@@ -14,11 +33,35 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe.unsqueeze(0))  # shape: (1, max_len, d_model)
 
     def forward(self, x):
-        # Eq. (4): Add positional encoding: H_enc^(0) = H^(0) + P
+        """
+        Add positional encoding to the input tensor.
+
+        Args:
+            x (Tensor): Input embeddings with shape (batch_size, seq_len, d_model).
+
+        Returns:
+            Tensor: Input embeddings plus positional encoding, same shape as input.
+        """
         return x + self.pe[:, :x.size(1)].to(x.device)
 
 
 class SelfGating(nn.Module):
+    """
+    Implements a self-gating mechanism as a simple element-wise gating operation.
+
+    The gating weights are computed by a sigmoid-activated linear layer 
+    applied to the input features, enabling the model to emphasize or suppress
+    information adaptively.
+
+    Args:
+        d_model (int): The dimensionality of the input feature vectors.
+
+    Forward Input:
+        x (Tensor): Input features of shape (batch_size, seq_len, d_model).
+
+    Forward Output:
+        Tensor of same shape with gated features.
+    """
     def __init__(self, d_model):
         super().__init__()
         # Eq. (11): G = σ(H_pool W_g + b_g)
@@ -28,11 +71,48 @@ class SelfGating(nn.Module):
         )
 
     def forward(self, x):
-        # Eq. (12): H_gated = H_pool ⊙ G
+        """
+        Apply self-gating on input tensor.
+
+        Args:
+            x (Tensor): Input tensor with shape (batch_size, seq_len, d_model).
+
+        Returns:
+            Tensor: Element-wise gated tensor of the same shape.
+        """
         return x * self.gate(x)
 
 
 class SelfGatedHierarchicalTransformerEncoder(nn.Module):
+    """
+    Self-Gated Hierarchical Transformer Encoder for time series classification.
+
+    The architecture consists of:
+    - A linear projection layer to increase input dimensionality.
+    - Positional encoding added to the input embeddings.
+    - A local Transformer encoder block (multiple layers).
+    - Adaptive average pooling to reduce temporal dimension.
+    - Self-gating mechanism after pooling.
+    - A high-level Transformer encoder block (multiple layers).
+    - A classifier on top of the high-level encoder outputs.
+
+    Args:
+        input_dim (int): Number of input features per time step.
+        d_model (int): Dimensionality of embedding space in Transformer.
+        nhead (int): Number of attention heads.
+        num_layers_low (int): Number of layers in local Transformer encoder.
+        num_layers_high (int): Number of layers in high-level Transformer encoder.
+        dim_feedforward (int): Dimension of feedforward layers in Transformer.
+        dropout (float): Dropout rate for Transformer layers.
+        pool_output_size (int): Output size of temporal dimension after pooling.
+        num_classes (int): Number of output classes for classification.
+
+    Forward Input:
+        x (Tensor): Input tensor of shape (batch_size, seq_len, input_dim).
+
+    Forward Output:
+        Tensor: Final class logits of shape (batch_size, num_classes).
+    """
     def __init__(self, input_dim, d_model=64, nhead=4,
                  num_layers_low=3, num_layers_high=3,
                  dim_feedforward=128, dropout=0.001,
@@ -70,6 +150,15 @@ class SelfGatedHierarchicalTransformerEncoder(nn.Module):
         )
 
     def forward(self, x):
+        """
+        Forward pass of the hierarchical transformer encoder.
+
+        Args:
+            x (Tensor): Input tensor with shape (batch_size, seq_len, input_dim).
+
+        Returns:
+            Tensor: Output logits of shape (batch_size, num_classes).
+        """
         B, T, F = x.shape
 
         # Eq. (1): Linear projection
