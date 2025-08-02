@@ -41,7 +41,7 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
     criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
     scaler = GradScaler()  # Mixed-precision training
 
-    num_epochs = 100
+    num_epochs = 250
     batch_size = 64
     loss_history = []
 
@@ -104,7 +104,7 @@ def main():
         None
     """
     # Load data
-    X_train, X_test, y_train, y_test = load_sampled_data(window_size=100, stride=5)
+    X_train, X_test, y_train, y_test = load_sampled_data(window_size=200, stride=5)
 
     print("Training Data Shape:", X_train.shape, y_train.shape)
     print("Test Data Shape:", X_test.shape, y_test.shape)
