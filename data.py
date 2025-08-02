@@ -15,6 +15,12 @@ from sklearn.preprocessing import StandardScaler as skStandardScaler
 
 
 def read_training_data():
+        """
+    Reads the Tennessee Eastman Process (TEP) training data from RData files.
+
+    Returns:
+        pd.DataFrame: Concatenated and sorted DataFrame of fault-free and faulty training data.
+    """
     b1 = pyreadr.read_r("/content/TEP_FaultFree_Training.RData")['fault_free_training']
     b2 = pyreadr.read_r("/content/TEP_Faulty_Training.RData")['faulty_training']
     train_ts = pd.concat([b1, b2])
@@ -22,6 +28,16 @@ def read_training_data():
 
 
 def sample_train_and_test(train_ts, type_model):
+    """
+    Samples training and test data based on model type (supervised or unsupervised).
+
+    Args:
+        train_ts (pd.DataFrame): The full training dataset.
+        type_model (str): Either "supervised" or "unsupervised".
+
+    Returns:
+        tuple: (sampled_train, sampled_test) as pandas DataFrames.
+    """
     sampled_train, sampled_test = pd.DataFrame(), pd.DataFrame()
     fault_0_data = train_ts[train_ts['faultNumber'] == 0]
 
@@ -58,6 +74,21 @@ def sample_train_and_test(train_ts, type_model):
 
 
 def scale_and_window(X_df, scaler, use_gpu=True, y_col='faultNumber', window_size=20, stride=5):
+    """
+    Applies scaling and sliding window segmentation to the dataset.
+
+    Args:
+        X_df (pd.DataFrame): Input time-series data with labels.
+        scaler (cuML StandardScaler): Fitted GPU-based scaler.
+        y_col (str): Column name containing the target/fault labels.
+        window_size (int): Size of each time window.
+        stride (int): Step size between consecutive windows.
+
+    Returns:
+        tuple: (X_win, y_win) where
+            - X_win (np.ndarray): 3D array of shape [num_windows, window_size, num_features].
+            - y_win (np.ndarray): 1D array of labels aligned with each window.
+    """
     y = X_df[y_col].values
     X = X_df.iloc[:, 3:].values
 
@@ -84,6 +115,21 @@ def scale_and_window(X_df, scaler, use_gpu=True, y_col='faultNumber', window_siz
 
 
 def load_sampled_data(window_size=20, stride=5, type_model="supervised", use_gpu=True):
+    """
+    Loads, scales, and windows the sampled training and test data.
+
+    Args:
+        window_size (int): Length of each sliding window.
+        stride (int): Step size for windowing.
+        type_model (str): Either "supervised" or "unsupervised".
+
+    Returns:
+        tuple: (X_train, X_test, y_train, y_test) as NumPy arrays.
+            - X_train: [N_train, window_size, num_features]
+            - X_test: [N_test, window_size, num_features]
+            - y_train: [N_train]
+            - y_test: [N_test]
+    """
     train_ts = read_training_data()
     sampled_train, sampled_test = sample_train_and_test(train_ts, type_model)
 
