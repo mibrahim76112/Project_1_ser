@@ -15,7 +15,7 @@ from sklearn.preprocessing import StandardScaler as skStandardScaler
 
 
 def read_training_data():
-        """
+    """
     Reads the Tennessee Eastman Process (TEP) training data from RData files.
 
     Returns:
