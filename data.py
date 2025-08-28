@@ -50,7 +50,7 @@ def sample_train_and_test(train_ts, type_model):
                 fr = []
                 b = train_ts[train_ts['faultNumber'] == i]
                 for x in range(1, 25):
-                    b_x = b[b['simulationRun'] == x].iloc[20:500]
+                    b_x = b[b['simulationRun'] == x].iloc[160:500]
                     fr.append(b_x)
                 frames_train.append(pd.concat(fr))
     elif type_model == "unsupervised":
