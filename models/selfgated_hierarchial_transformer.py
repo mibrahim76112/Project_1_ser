@@ -111,7 +111,13 @@ class SelfGatedHierarchicalTransformerEncoder(nn.Module):
         x (Tensor): Input tensor of shape (batch_size, seq_len, input_dim).
 
     Forward Output:
-        Tensor: Final class logits of shape (batch_size, num_classes).
+        If return_gates=False (default):
+            Tensor: Output logits of shape (batch_size, num_classes).
+        If return_gates=True:
+            (logits, extras) where extras is a dict with:
+                - 'gates': (B, S, d_model) raw gate coefficients σ(W_g z + b)
+                - 'W_proj': (d_model, F) input projection weights (for attribution)
+                - 'pooled': (B, S, d_model) pooled representations before gating
     """
     def __init__(self, input_dim, d_model=64, nhead=4,
                  num_layers_low=3, num_layers_high=3,
@@ -149,29 +155,39 @@ class SelfGatedHierarchicalTransformerEncoder(nn.Module):
             nn.Linear(128, num_classes)  # Eq. (17): h_drop W_c2 + b_c2
         )
 
-    def forward(self, x):
+        self.pool_output_size = pool_output_size
+        self.d_model = d_model
+
+    def forward(self, x, return_gates: bool = False):
         """
         Forward pass of the hierarchical transformer encoder.
 
         Args:
             x (Tensor): Input tensor with shape (batch_size, seq_len, input_dim).
+            return_gates (bool): If True, also return gate coefficients and aux tensors.
 
         Returns:
-            Tensor: Output logits of shape (batch_size, num_classes).
+            See class docstring.
         """
         B, T, F = x.shape
 
         # Eq. (1): Linear projection
-        x = self.input_proj(x)
+        z = self.input_proj(x)
 
         # Eq. (4): Add positional encoding
-        x = self.pos_encoder(x)
+        z = self.pos_encoder(z)
 
         # Eq. (5–9): Local Transformer encoding
-        low_out = self.encoder_low(x)
+        low_out = self.encoder_low(z)
 
         # Eq. (10): Adaptive pooling: H_pool = AdaptiveAvgPool1d(H_ell^T)^T
-        pooled = self.pool(low_out.transpose(1, 2)).transpose(1, 2)
+        pooled = self.pool(low_out.transpose(1, 2)).transpose(1, 2)  # (B, S, d_model)
+
+        # Compute raw gates explicitly for interpretability
+        with torch.no_grad():
+            gate_linear = self.self_gate.gate[0]   # Linear(d_model -> d_model)
+            gate_sigmoid = self.self_gate.gate[1]  # Sigmoid
+            raw_gates = gate_sigmoid(gate_linear(pooled.detach()))  # (B, S, d_model)
 
         # Eq. (11)–(12): Self-gating
         gated = self.self_gate(pooled)
@@ -179,10 +195,16 @@ class SelfGatedHierarchicalTransformerEncoder(nn.Module):
         # Eq. (13): High-level Transformer encoding
         high_out = self.encoder_high(gated)
 
-        # Eq. (15)–(17): Classifier on each timestep
+        # Eq. (15)–(17): Classifier on each timestep, then mean-pool logits
         logits_per_timestep = self.classifier(high_out)
-
-        # Eq. (14): Mean over time: z = (1/T') ∑ H_h[:, t, :]
         final_logits = logits_per_timestep.mean(dim=1)
+
+        if return_gates:
+            extras = {
+                'gates': raw_gates,                        # (B, S, d_model)
+                'W_proj': self.input_proj.weight.detach(), # (d_model, F)
+                'pooled': pooled.detach()                  # (B, S, d_model)
+            }
+            return final_logits, extras
 
         return final_logits  # Final prediction: ŷ ∈ ℝ^{B × num_classes}

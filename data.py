@@ -45,11 +45,11 @@ def sample_train_and_test(train_ts, type_model):
     if type_model == "supervised":
         for i in sorted(train_ts['faultNumber'].unique()):
             if i == 0:
-                frames_train.append(train_ts[train_ts['faultNumber'] == i].iloc[0:20000])
+                frames_train.append(train_ts[train_ts['faultNumber'] == i].iloc[0:100000])
             else:
                 fr = []
                 b = train_ts[train_ts['faultNumber'] == i]
-                for x in range(1, 25):
+                for x in range(1, 120):
                     b_x = b[b['simulationRun'] == x].iloc[20:500]
                     fr.append(b_x)
                 frames_train.append(pd.concat(fr))
@@ -60,11 +60,11 @@ def sample_train_and_test(train_ts, type_model):
     frames_test = []
     for i in sorted(train_ts['faultNumber'].unique()):
         if i == 0:
-            frames_test.append(fault_0_data.iloc[20000:22000])
+            frames_test.append(fault_0_data.iloc[100000:102000])
         else:
             fr = []
             b = train_ts[train_ts['faultNumber'] == i]
-            for x in range(26, 35):
+            for x in range(120, 150):
                 b_x = b[b['simulationRun'] == x].iloc[160:660]
                 fr.append(b_x)
             frames_test.append(pd.concat(fr))
