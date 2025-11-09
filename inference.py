@@ -174,7 +174,7 @@ def main():
         train_run_start=5,         
         train_run_end=15,         
         test_run_start=200,       
-        test_run_end=220          
+        test_run_end=210          
     )
 
     print("Training Data Shape:", X_train.shape, y_train.shape)
