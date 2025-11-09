@@ -166,8 +166,8 @@ def main():
         stride=args.stride,
         type_model="supervised",   # or "unsupervised"
         use_gpu=False,             # force CPU scaler
-        fault_free_path="/workspace/Project_1_ser/TEP_FaultFree_Testing.RData",
-        faulty_path="/workspace/Project_1_ser/TEP_Faulty_Testing.RData",
+        fault_free_path="/content/TEP_FaultFree_Testing.RData",
+        faulty_path="/content/TEP_Faulty_Testing.RData",
         train_end=2500,            # rows for fault 0 training
         test_start=248000,          # start row for fault 0 test
         test_end=250000,           # end row for fault 0 test
@@ -181,7 +181,6 @@ def main():
     print("Test Data Shape:", X_test.shape, y_test.shape)
     print("Unique classes in Training Set:", np.unique(y_train))
     print("Unique classes in Test Set:", np.unique(y_test))
-
 
     num_classes = 21
     input_dim = X_train.shape[2]
