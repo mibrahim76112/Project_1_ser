@@ -37,7 +37,7 @@ def read_training_data(
     b1_r = pyreadr.read_r(fault_free_path)
     b2_r = pyreadr.read_r(faulty_path)
 
-    # --- Determine key for fault-free dataset ---
+    
     if "Training" in os.path.basename(fault_free_path):
         key_free = "fault_free_training"
     elif "Testing" in os.path.basename(fault_free_path):
@@ -45,7 +45,6 @@ def read_training_data(
     else:
         raise ValueError(f"Cannot determine dataset key from file name: {fault_free_path}")
 
-    # --- Determine key for faulty dataset ---
     if "Training" in os.path.basename(faulty_path):
         key_faulty = "faulty_training"
     elif "Testing" in os.path.basename(faulty_path):
@@ -53,7 +52,6 @@ def read_training_data(
     else:
         raise ValueError(f"Cannot determine dataset key from file name: {faulty_path}")
 
-    # --- Extract data using correct keys ---
     if key_free not in b1_r:
         raise KeyError(f"Key '{key_free}' not found in {fault_free_path}")
     if key_faulty not in b2_r:
@@ -62,10 +60,8 @@ def read_training_data(
     b1 = b1_r[key_free]
     b2 = b2_r[key_faulty]
 
-    # --- Merge and sort ---
     train_ts = pd.concat([b1, b2])
     return train_ts.sort_values(by=["faultNumber", "simulationRun"])
-
 
 def sample_train_and_test(
     train_ts: pd.DataFrame,
@@ -73,10 +69,10 @@ def sample_train_and_test(
     train_end: int | None = None,
     test_start: int | None = None,
     test_end: int | None = None,
-    test_run_start: int | None = None,
-    test_run_end: int | None = None,
     train_run_start: int | None = None,
     train_run_end: int | None = None,
+    test_run_start: int | None = None,
+    test_run_end: int | None = None,
 ):
     """
     Samples training and test data based on model type (supervised or unsupervised),
@@ -141,12 +137,11 @@ def sample_train_and_test(
     frames_test = []
     for i in sorted(train_ts["faultNumber"].unique()):
         if i == 0:
-            # configurable slice for fault 0 test
+           
             frames_test.append(fault_0_data.iloc[test_start:test_end])
         else:
             fr = []
             b = train_ts[train_ts["faultNumber"] == i]
-            # configurable simulationRun range for faulty test data
             for x in range(test_run_start, test_run_end):
                 b_x = b[b["simulationRun"] == x].iloc[160:660]
                 fr.append(b_x)

@@ -164,17 +164,17 @@ def main():
     X_train, X_test, y_train, y_test = load_sampled_data(
         window_size=args.window_size,
         stride=args.stride,
-        type_model="supervised",   # or "unsupervised"
-        use_gpu=False,             # force CPU scaler
-        fault_free_path="/content/TEP_FaultFree_Testing.RData",
-        faulty_path="/content/TEP_Faulty_Testing.RData",
-        train_end=2500,            # rows for fault 0 training
-        test_start=248000,          # start row for fault 0 test
-        test_end=250000,           # end row for fault 0 test
-        train_run_start=5,         # start simulationRun for faulty training
-        train_run_end=15,          # end simulationRun for faulty training
-        test_run_start=200,        # start simulationRun for faulty test
-        test_run_end=230           # end simulationRun for faulty test
+        type_model="supervised",   
+        use_gpu=False,             
+        fault_free_path="/content/TEP_FaultFree_Training.RData",
+        faulty_path="/content/TEP_Faulty_Training.RData",
+        train_end=2500,            
+        test_start=247000,          
+        test_end=250000,          
+        train_run_start=5,         
+        train_run_end=15,         
+        test_run_start=200,       
+        test_run_end=220          
     )
 
     print("Training Data Shape:", X_train.shape, y_train.shape)
