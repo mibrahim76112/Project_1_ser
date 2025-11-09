@@ -1,0 +1,22 @@
+# Ignore zip files
+venv/
+*.zip
+*.npz
+# Ignore R workspace data files
+*.RData
+# Optional: Ignore Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.env/
+.myenv/
+myenv/
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore VS Code settings
+.vscode/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
