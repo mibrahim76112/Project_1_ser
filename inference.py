@@ -73,7 +73,7 @@ def run_inference(
 ) -> None:
     """
     Run inference on the test set, print classification metrics,
-    and optionally generate gating plots.
+    per-fault accuracies, and optionally generate gating plots.
     """
 
     X_test_tensor = torch.tensor(X_test, dtype=torch.float32, device=device)
@@ -81,24 +81,37 @@ def run_inference(
 
     model.eval()
     with torch.no_grad():
-        outputs = model(X_test_tensor)  
+        outputs = model(X_test_tensor)
         _, predicted = torch.max(outputs, dim=1)
 
     y_pred = predicted.cpu().numpy()
     y_true = y_test_tensor.cpu().numpy()
+
+    # ---- overall metrics ----
     print("[INFO] Test set classification metrics:")
     print_classification_metrics(y_true, y_pred)
+
+    # ---- per-fault accuracy (percent only) ----
+    print("\n[INFO] Per-fault accuracy (%):")
+    faults = np.unique(y_true)
+    for f in faults:
+        mask = (y_true == f)
+        if mask.sum() > 0:
+            acc = (y_pred[mask] == y_true[mask]).mean() * 100.0
+            print(f"  Fault {int(f):2d}: {acc:.2f}%")
+        else:
+            print(f"  Fault {int(f):2d}: N/A (no samples)")
 
     if not make_plots:
         return
 
-
+    # ---- gating visualizations ----
     os.makedirs("figures", exist_ok=True)
     slice_idx = slice(0, min(128, X_test_tensor.size(0)))
     with torch.no_grad():
         logits, extras = model(X_test_tensor[slice_idx], return_gates=True)
 
-    M_global = gates_to_sensor_segment_matrix(extras, reduce="max") 
+    M_global = gates_to_sensor_segment_matrix(extras, reduce="max")
     sensor_names = [f"Var{i+1}" for i in range(M_global.shape[0])]
 
     plot_gating_heatmap(
@@ -110,7 +123,6 @@ def run_inference(
     )
     print("[INFO] Saved global gating plots (inference) to figures/")
 
-  
     make_fault_gating_plots_with_delta(
         model=model,
         X_test_tensor=X_test_tensor,
@@ -156,25 +168,23 @@ def parse_args():
 def main():
     args = parse_args()
 
-
     device = torch.device("cpu")
     print(f"[INFO] Using device: {device} (CUDA disabled for inference)")
 
- 
     X_train, X_test, y_train, y_test = load_sampled_data(
         window_size=args.window_size,
         stride=args.stride,
-        type_model="supervised",   
-        use_gpu=False,             
+        type_model="supervised",
+        use_gpu=False,
         fault_free_path="/content/TEP_FaultFree_Training.RData",
         faulty_path="/content/TEP_Faulty_Training.RData",
-        train_end=2500,            
-        test_start=247000,          
-        test_end=250000,          
-        train_run_start=5,         
-        train_run_end=15,         
-        test_run_start=200,       
-        test_run_end=210          
+        train_end=2500,
+        test_start=247000,
+        test_end=250000,
+        train_run_start=5,
+        train_run_end=15,
+        test_run_start=200,
+        test_run_end=210,
     )
 
     print("Training Data Shape:", X_train.shape, y_train.shape)
@@ -184,7 +194,6 @@ def main():
 
     num_classes = 21
     input_dim = X_train.shape[2]
-
 
     model = build_model(
         input_dim=input_dim,
@@ -207,6 +216,7 @@ def main():
         device=device,
         make_plots=not args.no_plots,
     )
+
 
 if __name__ == "__main__":
     main()
