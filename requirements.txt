@@ -101,3 +101,4 @@ ucxx-cu11==0.43.0
 urllib3==2.4.0
 zict==3.0.0
 zipp==3.21.0
+matplotlib==3.9.2
