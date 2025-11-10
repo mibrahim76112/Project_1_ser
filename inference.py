@@ -121,7 +121,7 @@ def make_fault_delta_bar_plots(
     idx0 = (y_tensor == baseline_fault).nonzero(as_tuple=False).squeeze(-1)
     M0 = None
     if idx0.numel() == 0:
-        print(f"[WARN] No windows for baseline fault {baseline_fault}. Delta plots will be skipped.")
+     #   print(f"[WARN] No windows for baseline fault {baseline_fault}. Delta plots will be skipped.")
         return
     else:
         sel0 = idx0[: min(n_windows, idx0.numel())]
@@ -131,12 +131,12 @@ def make_fault_delta_bar_plots(
     F, _ = M0.shape
     sensor_names = [f"Var{i+1}" for i in range(F)]
 
-    # ---- per-fault absolute + delta top-k bar plots ----
+
     with torch.no_grad():
         for fid in fault_ids:
             idx = (y_tensor == fid).nonzero(as_tuple=False).squeeze(-1)
             if idx.numel() == 0:
-                print(f"[WARN] No test windows found for fault {fid}; skipping.")
+       #         print(f"[WARN] No test windows found for fault {fid}; skipping.")
                 continue
 
             sel = idx[: min(n_windows, idx.numel())]
@@ -144,7 +144,7 @@ def make_fault_delta_bar_plots(
 
             M = _compute_M_for_indices(model, X_tensor, sel, reduce=reduce)  # (F, S)
 
-            # Absolute top-k sensors
+         
             abs_png = f"figures/gating_top{k_top}_fault_{fid}.png"
             plot_topk_sensors(
                 M,
@@ -156,11 +156,10 @@ def make_fault_delta_bar_plots(
                 title_prefix="Top Sensors by Gate Weight",
             )
 
-            # Delta vs baseline
+            
             if M0 is not None and M0.shape == M.shape:
-                Md = M - M0  # signed differences
+                Md = M - M0  
 
-                # DEBUG: show top sensors by |Δ|
                 mean_delta = Md.mean(axis=1)
                 idx_debug = np.argsort(-np.abs(mean_delta))[:k_top]
                 names_debug = [sensor_names[i] for i in idx_debug]
@@ -186,9 +185,6 @@ def make_fault_delta_bar_plots(
                 print(
                     f"[INFO] Baseline missing or shape mismatch; saved absolute top-k plot for fault {fid} only."
                 )
-
-
-# ---------------- MODEL BUILD / CHECKPOINT ----------------
 
 def build_model(
     input_dim: int,
@@ -230,8 +226,6 @@ def load_checkpoint(
     print(f"[INFO] Loaded weights from: {ckpt_path}")
     return model
 
-
-# ---------------- INFERENCE: ACCURACY (TESTING FILE) ----------------
 
 def run_inference_for_accuracy(
     model: torch.nn.Module,
@@ -281,8 +275,6 @@ def run_inference_for_accuracy(
        # print(f"\n[INFO] Mean per-fault accuracy: {macro_acc:.2f}%")
 
 
-# ---------------- CLI + MAIN ----------------
-
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Inference (accuracy + gating Δ bar plots) for Self-Gated Hierarchical Transformer on TEP."
@@ -330,11 +322,11 @@ def main():
         type_model="supervised",
         fault_free_path="/workspace/TEP_FaultFree_Testing.RData",
         faulty_path="/workspace/TEP_Faulty_Testing.RData",
-        train_end=1000,
+        train_end=10000,
         test_start=10000,
         test_end=15000,
         train_run_start=5,
-        train_run_end=6,
+        train_run_end=20,
         test_run_start=1,
         test_run_end=80,
     )
@@ -371,7 +363,6 @@ def main():
     if args.no_plots:
         return
 
-    # -------- 2) Plots: use TEST set from TRAINING RData files --------
     print("\n[INFO] Plot code running")
     
     X_train_trainfile, X_test_plots, y_train_trainfile, y_test_plots = load_sampled_data(
@@ -382,11 +373,11 @@ def main():
         faulty_path="/workspace/TEP_Faulty_Training.RData",
         train_end=1000,
         test_start=100000,
-        test_end=104500,
+        test_end=114500,
         train_run_start=5,
         train_run_end=6,
         test_run_start=100,
-        test_run_end=120,
+        test_run_end=140,
     )
 
     print("Test (from Training file) Data Shape:", X_test_plots.shape, y_test_plots.shape)
@@ -399,7 +390,7 @@ def main():
         model=model,
         X_tensor=X_test_tensor_plots,
         y_tensor=y_test_tensor_plots,
-        fault_ids=[3, 9, 15],  # change if you want others
+        fault_ids=[3, 9, 15], 
         baseline_fault=0,
         k_top=10,
         n_windows=512,
