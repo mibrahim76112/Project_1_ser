@@ -176,7 +176,7 @@ def scale_and_window(
             - y_win (np.ndarray): [num_windows]
     """
     y = X_df[y_col].values
-    X = X_df.iloc[:, 3:].values  # assume first 3 cols are meta (fault, run, time)
+    X = X_df.iloc[:, 3:].values  
 
     if use_gpu and GPU_AVAILABLE:
         X_scaled = scaler.transform(cp.asarray(X))
@@ -266,7 +266,7 @@ def load_sampled_data(
     else:
         scaler = skStandardScaler()
         scaler.fit(fault_free)
-        print(f"[INFO] Using CPU Scaler (scikit-learn), fit on fault-free samples: {fault_free.shape[0]} rows")
+   #     print(f"[INFO] Using CPU Scaler (scikit-learn), fit on fault-free samples: {fault_free.shape[0]} rows")
 
     print("[INFO] Scaling and windowing training data...")
     X_train, y_train = scale_and_window(
