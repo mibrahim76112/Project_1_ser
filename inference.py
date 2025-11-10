@@ -168,23 +168,26 @@ def parse_args():
 def main():
     args = parse_args()
 
-    device = torch.device("cpu")
-    print(f"[INFO] Using device: {device} (CUDA disabled for inference)")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print(f"[INFO] Using device: {device} (CUDA enabled for inference)")
+    else:
+        device = torch.device("cpu")
+        print(f"[INFO] Using device: {device} (CUDA disabled for inference)")
 
     X_train, X_test, y_train, y_test = load_sampled_data(
         window_size=args.window_size,
         stride=args.stride,
         type_model="supervised",
-        use_gpu=False,
-        fault_free_path="/content/TEP_FaultFree_Training.RData",
-        faulty_path="/content/TEP_Faulty_Training.RData",
-        train_end=2500,
-        test_start=247000,
-        test_end=250000,
+        fault_free_path="/workspace/TEP_FaultFree_Testing.RData",
+        faulty_path="/workspace/TEP_Faulty_Testing.RData",
+        train_end=1000,
+        test_start=10000,
+        test_end=15000,
         train_run_start=5,
-        train_run_end=15,
-        test_run_start=200,
-        test_run_end=210,
+        train_run_end=6,
+        test_run_start=1,
+        test_run_end=40,
     )
 
     print("Training Data Shape:", X_train.shape, y_train.shape)
