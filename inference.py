@@ -70,21 +70,28 @@ def run_inference(
     y_test: np.ndarray,
     device: torch.device,
     make_plots: bool = True,
+    batch_size: int = 256,   # you can tune this
 ) -> None:
     """
-    Run inference on the test set, print classification metrics,
+    Run inference on the test set in batches, print classification metrics,
     per-fault accuracies, and optionally generate gating plots.
     """
 
-    X_test_tensor = torch.tensor(X_test, dtype=torch.float32, device=device)
+    # labels on device
     y_test_tensor = torch.tensor(y_test, dtype=torch.long, device=device)
 
     model.eval()
-    with torch.no_grad():
-        outputs = model(X_test_tensor)
-        _, predicted = torch.max(outputs, dim=1)
+    preds = []
 
-    y_pred = predicted.cpu().numpy()
+    # -------- BATCHEd INFERENCE --------
+    with torch.no_grad():
+        for i in range(0, len(X_test), batch_size):
+            batch_np = X_test[i : i + batch_size]
+            batch_tensor = torch.tensor(batch_np, dtype=torch.float32, device=device)
+            out = model(batch_tensor)
+            preds.append(out.argmax(dim=1).cpu())
+
+    y_pred = torch.cat(preds).numpy()
     y_true = y_test_tensor.cpu().numpy()
 
     # ---- overall metrics ----
@@ -105,11 +112,18 @@ def run_inference(
     if not make_plots:
         return
 
-    # ---- gating visualizations ----
+    # -------- GATING VISUALIZATIONS --------
     os.makedirs("figures", exist_ok=True)
-    slice_idx = slice(0, min(128, X_test_tensor.size(0)))
+
+    # 1) GLOBAL GATING HEATMAP ON A SLICE (for speed)
+    n_plot = min(2000, X_test.shape[0])   # was 128; you can tune this
+    slice_idx = slice(0, n_plot)
+
     with torch.no_grad():
-        logits, extras = model(X_test_tensor[slice_idx], return_gates=True)
+        X_plot_tensor = torch.tensor(
+            X_test[slice_idx], dtype=torch.float32, device=device
+        )
+        logits, extras = model(X_plot_tensor, return_gates=True)
 
     M_global = gates_to_sensor_segment_matrix(extras, reduce="max")
     sensor_names = [f"Var{i+1}" for i in range(M_global.shape[0])]
@@ -123,17 +137,50 @@ def run_inference(
     )
     print("[INFO] Saved global gating plots (inference) to figures/")
 
-    make_fault_gating_plots_with_delta(
-        model=model,
-        X_test_tensor=X_test_tensor,
-        y_test_tensor=y_test_tensor,
-        fault_ids=[3, 9, 15],  # example faults
-        baseline_fault=0,
-        k_top=10,
-        n_windows=128,
-        reduce="max",
-    )
+    # 2) PER-FAULT GATING PLOTS: explicitly pick windows for faults 0,3,9,15
+    fault_ids = [3, 9, 15]
+    max_per_fault = 128
 
+    y_np = y_test  # full test labels as numpy array
+    indices = []
+
+    # baseline windows (fault 0)
+    baseline_idx = np.where(y_np == 0)[0][:max_per_fault]
+    if len(baseline_idx) == 0:
+        print("[WARN] No baseline fault 0 windows found; per-fault plots may be unreliable.")
+    indices.extend(baseline_idx)
+
+    # windows for each fault of interest
+    for f in fault_ids:
+        f_idx = np.where(y_np == f)[0][:max_per_fault]
+        if len(f_idx) == 0:
+            print(f"[WARN] No test windows found for fault {f}; skipping in gating plots.")
+        indices.extend(f_idx)
+
+    indices = np.unique(indices)
+
+    if len(indices) == 0:
+        print("[WARN] No windows found for requested faults; skipping gating plots.")
+        return
+
+    with torch.no_grad():
+        X_fault_tensor = torch.tensor(
+            X_test[indices], dtype=torch.float32, device=device
+        )
+        y_fault_tensor = torch.tensor(
+            y_np[indices], dtype=torch.long, device=device
+        )
+
+        make_fault_gating_plots_with_delta(
+            model=model,
+            X_test_tensor=X_fault_tensor,
+            y_test_tensor=y_fault_tensor,
+            fault_ids=fault_ids,
+            baseline_fault=0,
+            k_top=10,
+            n_windows=len(indices),
+            reduce="max",
+        )
 
 def parse_args():
     parser = argparse.ArgumentParser(
