@@ -252,11 +252,20 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
     plt.close()
 
     model.eval()
+    eval_batch_size = 256  # you can tune this (128, 256, 512, etc.)
+
+    all_preds = []
+
     with torch.no_grad():
-        outputs = model(X_test_tensor)
-        _, predicted = torch.max(outputs, 1)
-        y_pred = predicted.cpu().numpy()
+        for i in range(0, X_test_tensor.size(0), eval_batch_size):
+            batch_x = X_test_tensor[i : i + eval_batch_size]
+            logits = model(batch_x)
+            preds = logits.argmax(dim=1).cpu()
+            all_preds.append(preds)
+
+        y_pred = torch.cat(all_preds).numpy()
         y_true = y_test_tensor.cpu().numpy()
+
         print_classification_metrics(y_true, y_pred)
 
         # Global (mixed faults) gating plots (absolute only)
@@ -281,7 +290,7 @@ def train_model(model, X_train, y_train, X_test, y_test, num_classes, device):
             fault_ids=[3, 9, 15],   
             baseline_fault=0,     
             k_top=10,
-            n_windows=128,
+            n_windows=512,
             reduce='max'          
         )
 

@@ -2,6 +2,7 @@ import os
 import argparse
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 from data import load_sampled_data
 from utils import print_classification_metrics
@@ -9,12 +10,11 @@ from models.selfgated_hierarchial_transformer import (
     SelfGatedHierarchicalTransformerEncoder,
 )
 
-from train import (
-    gates_to_sensor_segment_matrix,
-    plot_gating_heatmap,
-    make_fault_gating_plots_with_delta,
-)
+# we only reuse the matrix helper from train.py
+from train import gates_to_sensor_segment_matrix, plot_gating_heatmap
 
+
+# ---------------- MODEL HELPERS ----------------
 
 def build_model(
     input_dim: int,
@@ -28,10 +28,6 @@ def build_model(
     pool_output_size: int = 10,
     device: torch.device = torch.device("cpu"),
 ) -> torch.nn.Module:
-    """
-    Recreate the SelfGatedHierarchicalTransformerEncoder with the same
-    hyperparameters used during training.
-    """
     model = SelfGatedHierarchicalTransformerEncoder(
         input_dim=input_dim,
         d_model=d_model,
@@ -51,9 +47,6 @@ def load_checkpoint(
     ckpt_path: str,
     device: torch.device,
 ) -> torch.nn.Module:
-    """
-    Load model weights from a .pth checkpoint file.
-    """
     if not os.path.isfile(ckpt_path):
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
 
@@ -64,26 +57,68 @@ def load_checkpoint(
     return model
 
 
+# ---------------- PLOTTING: TOP-K Δ GATES ----------------
+
+def save_topk_delta_barplot(
+    Md: np.ndarray,
+    sensor_names: list[str],
+    fault_id: int,
+    k: int = 10,
+    out_png: str | None = None,
+):
+    """
+    Md: (F, S) delta matrix = M_fault - M_baseline
+    sensor_names: list of length F
+    """
+    F, S = Md.shape
+
+    # mean Δ per sensor across segments
+    mean_delta = Md.mean(axis=1)  # shape (F,)
+
+    # rank by absolute change so big + or − both count
+    idx = np.argsort(-np.abs(mean_delta))[:k]
+    vals = mean_delta[idx]
+    names = [sensor_names[i] for i in idx]
+
+    # reverse so biggest at top of plot
+    vals = vals[::-1]
+    names = names[::-1]
+
+    plt.figure(figsize=(10, max(4, 0.4 * k + 2)))
+    plt.barh(np.arange(len(vals)), vals)
+    plt.yticks(np.arange(len(vals)), names)
+    plt.xlabel("Mean Δ Gate Weight (fault − baseline)")
+    plt.title(f"Top Sensors by Δ Gate – Fault {fault_id}")
+    plt.tight_layout()
+
+    if out_png is not None:
+        plt.savefig(out_png, dpi=300, bbox_inches="tight")
+        plt.close()
+    else:
+        plt.show()
+
+
+# ---------------- INFERENCE ----------------
+
 def run_inference(
     model: torch.nn.Module,
     X_test: np.ndarray,
     y_test: np.ndarray,
     device: torch.device,
     make_plots: bool = True,
-    batch_size: int = 256,   # you can tune this
+    batch_size: int = 256,
 ) -> None:
     """
-    Run inference on the test set in batches, print classification metrics,
-    per-fault accuracies, and optionally generate gating plots.
+    Run inference on the test set in batches, print metrics,
+    and optionally generate gating plots.
     """
 
-    # labels on device
     y_test_tensor = torch.tensor(y_test, dtype=torch.long, device=device)
 
     model.eval()
     preds = []
 
-    # -------- BATCHEd INFERENCE --------
+    # -------- BATCHED INFERENCE (for metrics) --------
     with torch.no_grad():
         for i in range(0, len(X_test), batch_size):
             batch_np = X_test[i : i + batch_size]
@@ -94,29 +129,36 @@ def run_inference(
     y_pred = torch.cat(preds).numpy()
     y_true = y_test_tensor.cpu().numpy()
 
-    # ---- overall metrics ----
     print("[INFO] Test set classification metrics:")
     print_classification_metrics(y_true, y_pred)
 
-    # ---- per-fault accuracy (percent only) ----
     print("\n[INFO] Per-fault accuracy (%):")
     faults = np.unique(y_true)
+
+    # collect per-fault accuracies for macro (mean per-fault) accuracy
+    acc_list = []
+
     for f in faults:
         mask = (y_true == f)
         if mask.sum() > 0:
             acc = (y_pred[mask] == y_true[mask]).mean() * 100.0
+            acc_list.append(acc)
             print(f"  Fault {int(f):2d}: {acc:.2f}%")
         else:
             print(f"  Fault {int(f):2d}: N/A (no samples)")
 
+    # macro (mean per-fault) accuracy
+    if len(acc_list) > 0:
+        macro_acc = float(np.mean(acc_list))
+        print(f"\n[INFO] Mean per-fault accuracy: {macro_acc:.2f}%")
+
     if not make_plots:
         return
 
-    # -------- GATING VISUALIZATIONS --------
     os.makedirs("figures", exist_ok=True)
 
-    # 1) GLOBAL GATING HEATMAP ON A SLICE (for speed)
-    n_plot = min(2000, X_test.shape[0])   # was 128; you can tune this
+    # -------- 1) GLOBAL GATING HEATMAP --------
+    n_plot = min(2000, X_test.shape[0])
     slice_idx = slice(0, n_plot)
 
     with torch.no_grad():
@@ -125,7 +167,7 @@ def run_inference(
         )
         logits, extras = model(X_plot_tensor, return_gates=True)
 
-    M_global = gates_to_sensor_segment_matrix(extras, reduce="max")
+    M_global = gates_to_sensor_segment_matrix(extras, reduce="mean")
     sensor_names = [f"Var{i+1}" for i in range(M_global.shape[0])]
 
     plot_gating_heatmap(
@@ -137,50 +179,65 @@ def run_inference(
     )
     print("[INFO] Saved global gating plots (inference) to figures/")
 
-    # 2) PER-FAULT GATING PLOTS: explicitly pick windows for faults 0,3,9,15
-    fault_ids = [3, 9, 15]
-    max_per_fault = 128
+    # -------- 2) PER-FAULT Δ GATE PLOTS --------
+    fault_ids = [3, 9, 15]      # change this list if you want more faults
+    max_per_fault = 4096
 
-    y_np = y_test  # full test labels as numpy array
-    indices = []
+    y_np = y_test
 
-    # baseline windows (fault 0)
+    # baseline fault 0
     baseline_idx = np.where(y_np == 0)[0][:max_per_fault]
     if len(baseline_idx) == 0:
-        print("[WARN] No baseline fault 0 windows found; per-fault plots may be unreliable.")
-    indices.extend(baseline_idx)
-
-    # windows for each fault of interest
-    for f in fault_ids:
-        f_idx = np.where(y_np == f)[0][:max_per_fault]
-        if len(f_idx) == 0:
-            print(f"[WARN] No test windows found for fault {f}; skipping in gating plots.")
-        indices.extend(f_idx)
-
-    indices = np.unique(indices)
-
-    if len(indices) == 0:
-        print("[WARN] No windows found for requested faults; skipping gating plots.")
+        print("[WARN] No baseline fault 0 windows found; per-fault plots will be skipped.")
         return
 
     with torch.no_grad():
-        X_fault_tensor = torch.tensor(
-            X_test[indices], dtype=torch.float32, device=device
+        X_base = torch.tensor(
+            X_test[baseline_idx], dtype=torch.float32, device=device
         )
-        y_fault_tensor = torch.tensor(
-            y_np[indices], dtype=torch.long, device=device
-        )
+        logits0, extras0 = model(X_base, return_gates=True)
 
-        make_fault_gating_plots_with_delta(
-            model=model,
-            X_test_tensor=X_fault_tensor,
-            y_test_tensor=y_fault_tensor,
-            fault_ids=fault_ids,
-            baseline_fault=0,
-            k_top=10,
-            n_windows=len(indices),
-            reduce="max",
+    M0 = gates_to_sensor_segment_matrix(extras0, reduce="mean")  # (F, S)
+    print(f"[BASELINE] fault=0, windows used={len(baseline_idx)}")
+
+    for fid in fault_ids:
+        fault_idx = np.where(y_np == fid)[0][:max_per_fault]
+        if len(fault_idx) == 0:
+            print(f"[WARN] No test windows found for fault {fid}; skipping.")
+            continue
+
+        print(f"[FAULT] fid={fid}, windows used={len(fault_idx)}")
+
+        with torch.no_grad():
+            X_fault = torch.tensor(
+                X_test[fault_idx], dtype=torch.float32, device=device
+            )
+            logits_f, extras_f = model(X_fault, return_gates=True)
+
+        Mf = gates_to_sensor_segment_matrix(extras_f, reduce="mean")  # (F, S)
+        Md = Mf - M0  # Δ vs baseline
+
+        # DEBUG print to confirm numbers used in plot
+        mean_delta = Md.mean(axis=1)
+        idx_debug = np.argsort(-np.abs(mean_delta))[:10]
+        names_debug = [sensor_names[i] for i in idx_debug]
+        vals_debug = mean_delta[idx_debug]
+        print(f"[DEBUG] Fault {fid} Δ top sensors (used for plot):",
+              list(zip(names_debug, vals_debug)))
+
+        # save bar plot of top-k Δ sensors for this fault
+        out_png = f"figures/topk_delta_fault_{fid}.png"
+        save_topk_delta_barplot(
+            Md,
+            sensor_names,
+            fault_id=fid,
+            k=10,
+            out_png=out_png,
         )
+        print(f"[INFO] Saved Δ top-k bar plot for fault {fid} to {out_png}")
+
+
+# ---------------- CLI ----------------
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -230,11 +287,11 @@ def main():
         faulty_path="/workspace/TEP_Faulty_Testing.RData",
         train_end=1000,
         test_start=10000,
-        test_end=15000,
+        test_end=20000,
         train_run_start=5,
         train_run_end=6,
         test_run_start=1,
-        test_run_end=40,
+        test_run_end=80,
     )
 
     print("Training Data Shape:", X_train.shape, y_train.shape)
