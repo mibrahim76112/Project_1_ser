@@ -324,7 +324,7 @@ def main():
         faulty_path="/workspace/TEP_Faulty_Testing.RData",
         train_end=10000,
         test_start=10000,
-        test_end=15000,
+        test_end=21000,
         train_run_start=5,
         train_run_end=20,
         test_run_start=1,
