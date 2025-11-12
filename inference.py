@@ -323,12 +323,12 @@ def main():
         fault_free_path="/workspace/TEP_FaultFree_Testing.RData",
         faulty_path="/workspace/TEP_Faulty_Testing.RData",
         train_end=10000,
-        test_start=11000,
-        test_end=20000,
+        test_start=10000,
+        test_end=16000,
         train_run_start=5,
         train_run_end=20,
         test_run_start=1,
-        test_run_end=80,
+        test_run_end=50,
     )
 
     print("Test (Testing file) Data Shape:", X_test_metrics.shape, y_test_metrics.shape)
