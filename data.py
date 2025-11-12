@@ -143,7 +143,7 @@ def sample_train_and_test(
             fr = []
             b = train_ts[train_ts["faultNumber"] == i]
             for x in range(test_run_start, test_run_end):
-                b_x = b[b["simulationRun"] == x].iloc[135:660]
+                b_x = b[b["simulationRun"] == x].iloc[140:660]
                 fr.append(b_x)
             frames_test.append(pd.concat(fr))
 
